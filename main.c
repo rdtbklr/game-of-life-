@@ -25,7 +25,7 @@ void init_block(g_block *block){
     block->x = 0;
     block->y = 0;
 }
-
+#define cell_size 16
 void print_block(g_block *block){
     //char buffer[65];
     //buffer[64] = '\0';
@@ -37,10 +37,10 @@ void print_block(g_block *block){
         {
             //buffer[63 - j] = ((x >> j) &  1)? '1' : ' ';
             if((x >> j) &  1){
-                DrawRectangle((63 - j) * 16,i * 16,16,16, YELLOW);
+                DrawRectangle((63 - j) * cell_size,i * cell_size,cell_size,cell_size, YELLOW);
             }else{
 
-                DrawRectangle((63 - j) * 16,i * 16,16,16, BLACK);
+                DrawRectangle((63 - j) * cell_size,i * cell_size,cell_size,cell_size, BLACK);
             }
 
         }
@@ -61,7 +61,7 @@ int main()
     init_block(block);
     create_random_noise(block);
     //swap_pointers((void**)&block->next_block_content, (void**)&block->current_block_content);
-    InitWindow(256 * 4,256 * 4, "Game of life");
+    InitWindow(64 * cell_size,64 * cell_size, "Game of life");
     print_block(block);
 
     for(int i = 0; i <90000; i++){
