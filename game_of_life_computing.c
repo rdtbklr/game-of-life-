@@ -68,6 +68,8 @@ void compute_block(g_block *block){
     3 top left
 */
 #define rightmost_2_bit 0b11
+#define left_63_bit_mask ((uint64_t)0xFFFFFFFFFFFFFFFE)
+#define right_63_bit_mask ((uint64_t)0x7FFFFFFFFFFFFFFF)
     uint8_t index = 0,shifter = 0;
     //top right corner
     if(block->neighbours_sides[0] != NULL){
@@ -83,7 +85,7 @@ void compute_block(g_block *block){
         index |= block->neighbours_corners[1]->current_block_content[0] >> 63;
         shifter |= block->neighbours_corners[1]->current_block_content[1] >> 63;
     }
-    block->next_block_content[0] = (block->next_block_content[0] & 0xFFFFFFFE) | (access_look_up_table(index,shifter));
+    block->next_block_content[0] = (block->next_block_content[0] & left_63_bit_mask) | (access_look_up_table(index,shifter));
 
     //bottom right corner
     index = ((block->current_block_content[Block_side - 2] & rightmost_2_bit) << 4)
@@ -99,7 +101,7 @@ void compute_block(g_block *block){
     if(block->neighbours_corners[1] != NULL){
         shifter |= block->neighbours_corners[1]->current_block_content[0] >> 63;
     }
-    block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & 0xFFFFFFFE) | (access_look_up_table(index,shifter));
+    block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & left_63_bit_mask) | (access_look_up_table(index,shifter));
 
     //bottom left corner
     index = ((block->current_block_content[Block_side - 2] >> 62) << 3) | (block->current_block_content[Block_side - 1] >> 62);
@@ -114,10 +116,70 @@ void compute_block(g_block *block){
     if(block->neighbours_sides[2] != NULL){
         shifter |= block->neighbours_sides[2]->current_block_content[0] >> 62;
     }
-    block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & 0x7FFFFFFF) | (access_look_up_table(index,shifter) << 63);
+    block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
 
     //top left corner
+    index = block->current_block_content[0] >> 62;
+    shifter = block->current_block_content[1] >> 62;
+    if(block->neighbours_corners[3] != NULL){
+        index |= (block->neighbours_corners[3]->current_block_content[Block_side - 1] & 1) << 5;
+    }
+    if(block->neighbours_sides[0] != NULL){
+        index |= (block->neighbours_sides[0]->current_block_content[Block_side - 1] >> 62) << 3;
+    }
+    if(block->neighbours_sides[3] != NULL){
+        index |= (block->neighbours_sides[3]->current_block_content[0] & 1) << 2;
+        shifter |= (block->neighbours_sides[3]->current_block_content[1] & 1) << 2;
+    }
+    block->next_block_content[0] = (block->next_block_content[0] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
 
+    //right side without corners
+    if(block->neighbours_sides[1] != NULL){
+        index = ((block->current_block_content[0] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[0] >> 63);
+        for(uint16_t i = 1; i < Block_side - 1; i++){
+            index = (index & 0b111) << 3;
+            index |= ((block->current_block_content[i] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[i] >> 63);
+            shifter = ((block->current_block_content[i + 1] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[i + 1] >> 63);
+            block->next_block_content[i] = (block->next_block_content[i] & left_63_bit_mask) | (access_look_up_table(index,shifter));
+        }
+    }
+    else{
+        index = (block->current_block_content[0] & 0b11) << 1;
+        for(uint16_t i = 1; i < Block_side - 1; i++){
+            index = (index & 0b111) << 3;
+            index |= (block->current_block_content[i] & 0b11) << 1;
+            shifter = (block->current_block_content[i + 1] & 0b11) << 1;
+            block->next_block_content[i] = (block->next_block_content[i] & left_63_bit_mask) | (access_look_up_table(index,shifter));
+
+            if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
+                //create neighbour event
+            }
+        }
+    }
+
+    //left side without corners
+    if(block->neighbours_sides[3] != NULL){
+        index = (block->current_block_content[0] >> 62) | ((block->neighbours_sides[3]->current_block_content[0] & 1) << 2);
+        for(uint16_t i = 1; i < Block_side - 1; i++){
+            index = (index & 0b111) << 3;
+            index |= (block->current_block_content[i] >> 62) | ((block->neighbours_sides[3]->current_block_content[i] & 1) << 2);
+            shifter = (block->current_block_content[i + 1] >> 62) | ((block->neighbours_sides[3]->current_block_content[i + 1] & 1) << 2);
+            block->next_block_content[i] = (block->next_block_content[i] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
+        }
+    }
+    else{
+        index = block->current_block_content[0] >> 62;
+        for(uint16_t i = 1; i < Block_side - 1; i++){
+            index = (index & 0b111) << 3;
+            index |= block->current_block_content[i] >> 62;
+            shifter = block->current_block_content[i + 1] >> 62;
+            block->next_block_content[i] = (block->next_block_content[i] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
+
+            if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
+                //create neighbour event
+            }
+        }
+    }
 }
 
 void create_random_noise(g_block *block){

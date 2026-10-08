@@ -62,13 +62,6 @@ int main()
     create_random_noise(block);
     //swap_pointers((void**)&block->next_block_content, (void**)&block->current_block_content);
     InitWindow(256 * 4,256 * 4, "Game of life");
-    for(int i = 0; i < 256*4; i++){
-        BeginDrawing();
-        DrawRectangle(0,0,i,i,WHITE);
-        EndDrawing();
-        usleep(1000);
-
-    }
     print_block(block);
 
     for(int i = 0; i <90000; i++){
@@ -77,7 +70,7 @@ int main()
         printf("\n\t%d\n",i);
         swap_pointers(block);
 
-        //usleep(1000* 50);
+        usleep(1000* 50);
     }
     free(block);
     return 0;

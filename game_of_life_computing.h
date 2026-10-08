@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <immintrin.h>
 #define Block_side 64
-#define access_look_up_table(index, shifter) ((look_up_table[index] >> shifter) & 1)
+#define access_look_up_table(index, shifter) ((uint64_t)((look_up_table[index] >> shifter) & 1))
 
 
 typedef struct Game_of_life_block{
