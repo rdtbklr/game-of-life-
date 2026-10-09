@@ -14,9 +14,10 @@ typedef struct Block_List{
     var_type type;
 }b_list;
 
-b_list init_list(size_t size);
-void expand_list(b_list *lt, size_t size);
-void add_element(b_list *lt, g_block *block,size_t size);
-
+inline b_list init_list(size_t size);
+inline void expand_list(b_list *lt, size_t size);
+inline void add_element(b_list *lt, g_block *block,size_t size);
+inline void delete_list(b_list *lt);
+inline void delete_element(b_list *lt, g_block *block);
 
 #endif // MEMORY_MANAGEMENT_H

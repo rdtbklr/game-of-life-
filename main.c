@@ -32,13 +32,13 @@ int main()
     InitWindow(64 * cell_size,64 * cell_size, "Game of life");
     print_block(block,0 ,0 , cell_size);
 
-    for(int i = 0; i <90000; i++){
+    for(int i = 0; WindowShouldClose() == 0; i++){
         compute_block(block);
         print_block(block,0 ,0 , cell_size);
         printf("\n\t%d\n",i);
         swap_pointers(block);
 
-        usleep(1000 * 50);
+        usleep(1000 * 5);
     }
     free(block);
     return 0;
