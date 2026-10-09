@@ -1,4 +1,12 @@
 #include"game_of_life_computing.h"
+#include<stdlib.h>
+#include <time.h>
+#include <stdint.h>
+#include <immintrin.h>
+#include <stdio.h>
+#include <string.h>
+#define Block_side 64
+#define access_look_up_table(index, shifter) ((uint64_t)((look_up_table[index] >> shifter) & 1))
 
 
 
@@ -208,7 +216,18 @@ void compute_block(g_block *block){
         }
     }
 }
-
+void init_block(g_block *block){
+    block->current_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
+    block->next_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
+    if(block->current_block_content == NULL || block->next_block_content == NULL){
+        printf("could not allocate memory\n");
+        exit(1);
+    }
+    memset(block->neighbours_sides, 0, sizeof(struct Game_of_life_block*) * 4);
+    memset(block->neighbours_corners, 0, sizeof(struct Game_of_life_block*) * 4);
+    block->x = 0;
+    block->y = 0;
+}
 void create_random_noise(g_block *block){
     srand(time(NULL));
     for(int i = 0; i < 64; i++){

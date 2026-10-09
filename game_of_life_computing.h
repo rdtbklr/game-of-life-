@@ -1,11 +1,6 @@
 #ifndef GAME_OF_LIFE_COMPUTING_H
 #define GAME_OF_LIFE_COMPUTING_H
-#include<stdlib.h>
-#include <time.h>
 #include <stdint.h>
-#include <immintrin.h>
-#define Block_side 64
-#define access_look_up_table(index, shifter) ((uint64_t)((look_up_table[index] >> shifter) & 1))
 
 
 typedef struct Game_of_life_block{
@@ -29,5 +24,6 @@ typedef struct Game_of_life_block{
 
 void compute_block(g_block *block);
 void create_random_noise(g_block *block);
+void init_block(g_block *block);
 
 #endif // GAME_OF_LIFE_COMPUTING_H
