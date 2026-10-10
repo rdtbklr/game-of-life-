@@ -79,3 +79,18 @@ inline void delete_element(b_list *lt, g_block *block){
     }
     temp->used--;
 }
+inline void add_by_index(b_list *lt, size_t index, g_block *block){
+    b_list *temp = lt;
+    size_t size = 0;
+    while(1){
+        if(size + temp->size> index){
+            temp->pointers[index - size] = block;
+            return;
+        }else{
+            size += temp->size;
+        }
+        if(temp->next == NULL){
+
+        }
+    }
+}

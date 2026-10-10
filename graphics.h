@@ -2,10 +2,9 @@
 #define GRAPHICS_H
 #include "game_of_life_computing.h"
 #include "memory_management.h"
+#include "Structs.h"
 
-struct Blocks_in_frame{
-    b_list list;
-};
+
 
 void print_block(g_block *block,uint64_t start_x,uint64_t start_y,uint8_t cell_size);
 #endif // GRAPHICS_H

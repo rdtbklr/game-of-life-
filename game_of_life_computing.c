@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #define Block_side 64
-#define access_look_up_table(index, shifter) ((uint64_t)((look_up_table[index] >> shifter) & 1))
+#define access_look_up_table(index, shifter) ((uint64_t)((look_up_table[(index)] >> (shifter)) & 1))
 
 
 
@@ -41,7 +41,30 @@ void create_lookup_table(){
     }
     printf(";\n");
 }*/
-void compute_block(g_block *block){
+
+/*
+    10000000 top right
+    01000000 bottom right
+    00100000 bottom left
+    00010000 top left
+    00001000 top
+    00000100 right
+    00000010 bottom
+    00000001 left
+    uint8_t that this function returns gets and by these and that neighbour will get created next cycle
+*/
+enum generation_enum{
+    TOP_RIGHT =     0b10000000,
+    BOTTOM_RIGHT =  0b01000000,
+    BOTTOM_LEFT =   0b00100000,
+    TOP_LEFT =      0b00010000,
+    TOP =           0b00001000,
+    RIGHT =         0b00000100,
+    BOTTOM =        0b00000010,
+    LEFT =          0b00000001
+};
+uint8_t compute_block_avx512(g_block *block){
+    uint8_t new_block_mask = 0;
     //compute middle with top and bottom
     for(int8_t i = 0; i < 64; i += 8)
     {
@@ -106,21 +129,35 @@ void compute_block(g_block *block){
 #define left_63_bit_mask (UINT64_C(0xFFFFFFFFFFFFFFFE))
 #define right_63_bit_mask (UINT64_C(0x7FFFFFFFFFFFFFFF))
     uint8_t index = 0,shifter = 0;
+
+
     //top right corner
+    index = (block->current_block_content[0] & 0b11) << 1;
+    shifter = (block->current_block_content[1] & 0b11) << 1;
     if(block->neighbours_sides[0] != NULL){
-        index = (block->neighbours_sides[0]->current_block_content[Block_side - 1] & rightmost_2_bit) << 1;
+        index |= (block->neighbours_sides[0]->current_block_content[Block_side - 1] & 0b11) << 4;
     }
     if(block->neighbours_corners[0] != NULL){
-        index |= block->neighbours_corners[0]->current_block_content[Block_side - 1] >> 63;
+        index |= (block->neighbours_corners[0]->current_block_content[Block_side - 1] >> 63) << 3;
     }
-    index <<= 3;
-    index |= (block->current_block_content[0] & rightmost_2_bit) << 1;
-    shifter |= (block->current_block_content[1] & rightmost_2_bit) << 1;
     if(block->neighbours_sides[1] != NULL){
-        index |= block->neighbours_corners[1]->current_block_content[0] >> 63;
-        shifter |= block->neighbours_corners[1]->current_block_content[1] >> 63;
+        index |= block->neighbours_sides[1]->current_block_content[0] >> 63;
+        shifter |= block->neighbours_sides[1]->current_block_content[1] >> 63;
     }
     block->next_block_content[0] = (block->next_block_content[0] & left_63_bit_mask) | (access_look_up_table(index,shifter));
+    //checking new block generation
+    if(access_look_up_table((index >> 3) & 1, index & 0b111) == 1){
+        //generate top
+        new_block_mask |= TOP;
+    }
+    if((index & 0b010011) == 0b010011){
+        //generate top right
+        new_block_mask |= TOP_RIGHT;
+    }
+    if(access_look_up_table(index & 0b011000, (index & 0b10) | ((shifter >> 1) & 1)) == 1){
+        //generate right
+        new_block_mask |= RIGHT;
+    }
 
     //bottom right corner
     index = ((block->current_block_content[Block_side - 2] & rightmost_2_bit) << 4)
@@ -137,6 +174,19 @@ void compute_block(g_block *block){
         shifter |= block->neighbours_corners[1]->current_block_content[0] >> 63;
     }
     block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & left_63_bit_mask) | (access_look_up_table(index,shifter));
+    //checking new block generation
+    if(access_look_up_table((index >> 1) & 0b1001, shifter & 0b011) == 1){
+        //generate right
+        new_block_mask |= RIGHT;
+    }
+    if(((index & 0b11) == 0b11) && ((shifter & 0b10) == 0b10)){
+        //generate bottom right
+        new_block_mask |= BOTTOM_RIGHT;
+    }
+    if(access_look_up_table(shifter & 1, index & 0b111) == 1){
+        //generate bottom
+        new_block_mask |= BOTTOM;
+    }
 
     //bottom left corner
     index = ((block->current_block_content[Block_side - 2] >> 62) << 3) | (block->current_block_content[Block_side - 1] >> 62);
@@ -152,6 +202,20 @@ void compute_block(g_block *block){
         shifter |= block->neighbours_sides[2]->current_block_content[0] >> 62;
     }
     block->next_block_content[Block_side - 1] = (block->next_block_content[Block_side - 1] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
+    //checking new block generation
+    if(access_look_up_table(shifter & 0b100, index & 0b111) == 1){
+        //generate bottom
+        new_block_mask |= BOTTOM;
+    }
+    if(((index & 0b110) == 0b110) && ((shifter & 0b010) == 0b010)){
+        //generate bottom left
+        new_block_mask |= BOTTOM_LEFT;
+    }
+    if(access_look_up_table((index >> 1) & 0b1001, shifter & 0b110) == 1){
+        //generate bottom
+        new_block_mask |= BOTTOM;
+    }
+
 
     //top left corner
     index = block->current_block_content[0] >> 62;
@@ -167,6 +231,19 @@ void compute_block(g_block *block){
         shifter |= (block->neighbours_sides[3]->current_block_content[1] & 1) << 2;
     }
     block->next_block_content[0] = (block->next_block_content[0] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
+    //checking new block generation
+    if(access_look_up_table((index >> 1) & 0b11001, shifter & 0b010) == 1){
+        //generate left
+        new_block_mask |= LEFT;
+    }
+    if((index & 0b010110) == 0b010110){
+        //generate top left
+        new_block_mask |= TOP_LEFT;
+    }
+    if(access_look_up_table(index >> 5, index & 0b111) == 1){
+        //generate top
+        new_block_mask |= TOP;
+    }
 
     //right side without corners
     if(block->neighbours_sides[1] != NULL){
@@ -187,7 +264,8 @@ void compute_block(g_block *block){
             block->next_block_content[i] = (block->next_block_content[i] & left_63_bit_mask) | (access_look_up_table(index,shifter));
 
             if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
-                //create neighbour event
+                new_block_mask |= RIGHT;
+                //create right neighbour event
             }
         }
     }
@@ -211,11 +289,25 @@ void compute_block(g_block *block){
             block->next_block_content[i] = (block->next_block_content[i] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
 
             if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
-                //create neighbour event
+                new_block_mask |= LEFT;
+                //create left neighbour event
             }
         }
     }
+    //check for top and bottom for new block generation
+    for(uint8_t i = 0; i < 61; i++){
+        if(((block->current_block_content[0] >> i) & 0b111) == 0b111){
+            new_block_mask |= TOP;
+            //create top neighbour event
+        }
+        if(((block->current_block_content[Block_side - 1] >> i) & 0b111) == 0b111){
+            new_block_mask |= BOTTOM;
+            //create bottom neighbour event
+        }
+    }
+    return new_block_mask;
 }
+
 void init_block(g_block *block){
     block->current_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
     block->next_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
@@ -234,4 +326,20 @@ void create_random_noise(g_block *block){
         block->current_block_content[i] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
         block->next_block_content[i] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
     }
+}
+void free_block(g_block *block){
+    for(uint8_t i = 0; i < 4; i++){
+        if(block->neighbours_corners[i] != NULL){
+            block->neighbours_corners[i]->neighbours_corners[(i + 2) & 0b11] = NULL;
+        }
+        if(block->neighbours_sides[i] != NULL){
+            block->neighbours_sides[i]->neighbours_sides[(i + 2) & 0b11] = NULL;
+        }
+    }
+    free(block->current_block_content);
+    free(block->next_block_content);
+    free(block);
+}
+void main_compute(Core core){
+
 }

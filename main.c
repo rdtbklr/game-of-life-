@@ -33,12 +33,12 @@ int main()
     print_block(block,0 ,0 , cell_size);
 
     for(int i = 0; WindowShouldClose() == 0; i++){
-        compute_block(block);
+
+        printf("\n\t%.8b\n",compute_block_avx512(block));
         print_block(block,0 ,0 , cell_size);
-        printf("\n\t%d\n",i);
         swap_pointers(block);
 
-        usleep(1000 * 5);
+        usleep(1000 * 50);
     }
     free(block);
     return 0;
