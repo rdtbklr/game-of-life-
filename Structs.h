@@ -2,10 +2,23 @@
 #define STRUCTS_H
 #include<stdint.h>
 #include <stdlib.h>
+#include "raylib.h"
+enum NEIGHBOUR_SIDES{
+    TOP = 0,
+    RIGHT = 1,
+    BOTTOM = 2,
+    LEFT = 3
+};
+enum NEIGHBOUR_CORNERS{
+    TOP_RIGHT= 0,
+    BOTTOM_RIGHT = 1,
+    BOTTOM_LEFT = 2,
+    TOP_LEFT = 3
+};
 
 typedef struct Game_of_life_block{
-    uint64_t *current_block_content;
-    uint64_t *next_block_content;
+    int64_t *current_block_content;
+    int64_t *next_block_content;
 
     struct Game_of_life_block *neighbours_sides[4]; /*
     0 top
@@ -33,13 +46,17 @@ typedef struct Core_list{
     struct Block_List main;
     struct Block_List delete_next;
     struct Block_List create_next;
-    uint64_t size;
+    size_t size;
 }Core;
 
 
-struct Blocks_in_frame{
+typedef struct Blocks_in_frame{
     b_list list;
-    double x,y;
-};
+    Color alive_cell_color, Dead_cell_color;
+    Camera2D camera;
+    size_t cell_size;
+    size_t size;
+    size_t window_size_x,window_size_y;
+}Frame;
 
 #endif // STRUCTS_H

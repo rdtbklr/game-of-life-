@@ -23,15 +23,14 @@ void swap_pointers(g_block *block){
     block->next_block_content = temp;
 }
 
+
 int main()
 {
-    g_block *block = (g_block*) calloc(1, sizeof(g_block));
-    init_block(block);
+    g_block *block = init_block(0,0);
     create_random_noise(block);
     //swap_pointers((void**)&block->next_block_content, (void**)&block->current_block_content);
-    InitWindow(64 * cell_size,64 * cell_size, "Game of life");
+    InitWindow(64 * cell_size,64 * cell_size, "Game of life ");
     print_block(block,0 ,0 , cell_size);
-
     for(int i = 0; WindowShouldClose() == 0; i++){
 
         printf("\n\t%.8b\n",compute_block_avx512(block));

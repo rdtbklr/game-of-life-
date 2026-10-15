@@ -54,14 +54,14 @@ void create_lookup_table(){
     uint8_t that this function returns gets and by these and that neighbour will get created next cycle
 */
 enum generation_enum{
-    TOP_RIGHT =     0b10000000,
-    BOTTOM_RIGHT =  0b01000000,
-    BOTTOM_LEFT =   0b00100000,
-    TOP_LEFT =      0b00010000,
-    TOP =           0b00001000,
-    RIGHT =         0b00000100,
-    BOTTOM =        0b00000010,
-    LEFT =          0b00000001
+    TOP_RIGHTM =     0b10000000,
+    BOTTOM_RIGHTM =  0b01000000,
+    BOTTOM_LEFTM =   0b00100000,
+    TOP_LEFTM =      0b00010000,
+    TOPM =           0b00001000,
+    RIGHTM =         0b00000100,
+    BOTTOMM =        0b00000010,
+    LEFTM =          0b00000001
 };
 uint8_t compute_block_avx512(g_block *block){
     uint8_t new_block_mask = 0;
@@ -148,15 +148,15 @@ uint8_t compute_block_avx512(g_block *block){
     //checking new block generation
     if(access_look_up_table((index >> 3) & 1, index & 0b111) == 1){
         //generate top
-        new_block_mask |= TOP;
+        new_block_mask |= TOPM;
     }
     if((index & 0b010011) == 0b010011){
         //generate top right
-        new_block_mask |= TOP_RIGHT;
+        new_block_mask |= TOP_RIGHTM;
     }
     if(access_look_up_table(index & 0b011000, (index & 0b10) | ((shifter >> 1) & 1)) == 1){
         //generate right
-        new_block_mask |= RIGHT;
+        new_block_mask |= RIGHTM;
     }
 
     //bottom right corner
@@ -177,15 +177,15 @@ uint8_t compute_block_avx512(g_block *block){
     //checking new block generation
     if(access_look_up_table((index >> 1) & 0b1001, shifter & 0b011) == 1){
         //generate right
-        new_block_mask |= RIGHT;
+        new_block_mask |= RIGHTM;
     }
     if(((index & 0b11) == 0b11) && ((shifter & 0b10) == 0b10)){
         //generate bottom right
-        new_block_mask |= BOTTOM_RIGHT;
+        new_block_mask |= BOTTOM_RIGHTM;
     }
     if(access_look_up_table(shifter & 1, index & 0b111) == 1){
         //generate bottom
-        new_block_mask |= BOTTOM;
+        new_block_mask |= BOTTOMM;
     }
 
     //bottom left corner
@@ -205,15 +205,15 @@ uint8_t compute_block_avx512(g_block *block){
     //checking new block generation
     if(access_look_up_table(shifter & 0b100, index & 0b111) == 1){
         //generate bottom
-        new_block_mask |= BOTTOM;
+        new_block_mask |= BOTTOMM;
     }
     if(((index & 0b110) == 0b110) && ((shifter & 0b010) == 0b010)){
         //generate bottom left
-        new_block_mask |= BOTTOM_LEFT;
+        new_block_mask |= BOTTOM_LEFTM;
     }
     if(access_look_up_table((index >> 1) & 0b1001, shifter & 0b110) == 1){
         //generate bottom
-        new_block_mask |= BOTTOM;
+        new_block_mask |= BOTTOMM;
     }
 
 
@@ -234,15 +234,15 @@ uint8_t compute_block_avx512(g_block *block){
     //checking new block generation
     if(access_look_up_table((index >> 1) & 0b11001, shifter & 0b010) == 1){
         //generate left
-        new_block_mask |= LEFT;
+        new_block_mask |= LEFTM;
     }
     if((index & 0b010110) == 0b010110){
         //generate top left
-        new_block_mask |= TOP_LEFT;
+        new_block_mask |= TOP_LEFTM;
     }
     if(access_look_up_table(index >> 5, index & 0b111) == 1){
         //generate top
-        new_block_mask |= TOP;
+        new_block_mask |= TOPM;
     }
 
     //right side without corners
@@ -264,7 +264,7 @@ uint8_t compute_block_avx512(g_block *block){
             block->next_block_content[i] = (block->next_block_content[i] & left_63_bit_mask) | (access_look_up_table(index,shifter));
 
             if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
-                new_block_mask |= RIGHT;
+                new_block_mask |= RIGHTM;
                 //create right neighbour event
             }
         }
@@ -289,7 +289,7 @@ uint8_t compute_block_avx512(g_block *block){
             block->next_block_content[i] = (block->next_block_content[i] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
 
             if(((index & 0b010010) == 0b010010) && ((shifter & 0b010) == 0b010)){
-                new_block_mask |= LEFT;
+                new_block_mask |= LEFTM;
                 //create left neighbour event
             }
         }
@@ -297,18 +297,19 @@ uint8_t compute_block_avx512(g_block *block){
     //check for top and bottom for new block generation
     for(uint8_t i = 0; i < 61; i++){
         if(((block->current_block_content[0] >> i) & 0b111) == 0b111){
-            new_block_mask |= TOP;
+            new_block_mask |= TOPM;
             //create top neighbour event
         }
         if(((block->current_block_content[Block_side - 1] >> i) & 0b111) == 0b111){
-            new_block_mask |= BOTTOM;
+            new_block_mask |= BOTTOMM;
             //create bottom neighbour event
         }
     }
     return new_block_mask;
 }
 
-void init_block(g_block *block){
+g_block* init_block(int64_t x, int64_t y){
+    g_block *block =(g_block*) malloc(sizeof(g_block));
     block->current_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
     block->next_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
     if(block->current_block_content == NULL || block->next_block_content == NULL){
@@ -317,8 +318,9 @@ void init_block(g_block *block){
     }
     memset(block->neighbours_sides, 0, sizeof(struct Game_of_life_block*) * 4);
     memset(block->neighbours_corners, 0, sizeof(struct Game_of_life_block*) * 4);
-    block->x = 0;
-    block->y = 0;
+    block->x = x;
+    block->y = y;
+    return block;
 }
 void create_random_noise(g_block *block){
     srand(time(NULL));
@@ -340,6 +342,109 @@ void free_block(g_block *block){
     free(block->next_block_content);
     free(block);
 }
-void main_compute(Core core){
 
+void main_compute(Core *core, size_t size){
+    for(b_list *temp = &(core->main); temp != NULL; temp = temp->next){
+        for(size_t i = 0; i <= temp->used; i++){
+            uint8_t mask = compute_block_avx512(temp->pointers[i]);
+            g_block *tempb;
+
+            // ==========================================
+            // 4 SIDES (Using neighbours_sides array)
+            // ==========================================
+
+            // 0: TOP (y + 1)
+            if(temp->pointers[i]->neighbours_sides[TOP] == NULL && (mask & TOPM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x, temp->pointers[i]->y + 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x, temp->pointers[i]->y + 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_sides[BOTTOM] = temp->pointers[i];
+                temp->pointers[i]->neighbours_sides[TOP] = tempb;
+            }
+
+            // 1: RIGHT (x + 1)
+            if(temp->pointers[i]->neighbours_sides[RIGHT] == NULL && (mask & RIGHTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_sides[LEFT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_sides[RIGHT] = tempb;
+            }
+
+            // 2: BOTTOM (y - 1)
+            if(temp->pointers[i]->neighbours_sides[BOTTOM] == NULL && (mask & BOTTOMM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x, temp->pointers[i]->y - 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x, temp->pointers[i]->y - 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_sides[TOP] = temp->pointers[i];
+                temp->pointers[i]->neighbours_sides[BOTTOM] = tempb;
+            }
+
+            // 3: LEFT (x - 1)
+            if(temp->pointers[i]->neighbours_sides[LEFT] == NULL && (mask & LEFTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_sides[RIGHT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_sides[LEFT] = tempb;
+            }
+
+
+            // ==========================================
+            // 4 CORNERS (Using neighbours_corners array)
+            // ==========================================
+
+            // 0: TOP_RIGHT (x + 1, y + 1)
+            if(temp->pointers[i]->neighbours_corners[TOP_RIGHT] == NULL && (mask & TOP_RIGHTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y + 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y + 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_corners[BOTTOM_LEFT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_corners[TOP_RIGHT] = tempb;
+            }
+
+            // 1: BOTTOM_RIGHT (x + 1, y - 1)
+            if(temp->pointers[i]->neighbours_corners[BOTTOM_RIGHT] == NULL && (mask & BOTTOM_RIGHTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y - 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y - 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_corners[TOP_LEFT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_corners[BOTTOM_RIGHT] = tempb;
+            }
+
+            // 2: BOTTOM_LEFT (x - 1, y - 1)
+            if(temp->pointers[i]->neighbours_corners[BOTTOM_LEFT] == NULL && (mask & BOTTOM_LEFTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y - 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y - 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_corners[TOP_RIGHT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_corners[BOTTOM_LEFT] = tempb;
+            }
+
+            // 3: TOP_LEFT (x - 1, y + 1)
+            if(temp->pointers[i]->neighbours_corners[TOP_LEFT] == NULL && (mask & TOP_LEFTM) != 0){
+                tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y + 1);
+                if(tempb == NULL){
+                    tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y + 1);
+                    add_element(&core->create_next, tempb, size);
+                }
+                tempb->neighbours_corners[BOTTOM_RIGHT] = temp->pointers[i];
+                temp->pointers[i]->neighbours_corners[TOP_LEFT] = tempb;
+            }
+        }
+    }
 }

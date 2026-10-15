@@ -15,7 +15,7 @@ add_executable(game_of_life main.c
     memory_management.c
     Structs.h
 )
-target_compile_options(game_of_life PRIVATE -mavx512f)
+target_compile_options(game_of_life PRIVATE -mavx512f -O2)
 target_link_libraries(game_of_life PRIVATE raylib)
 include(GNUInstallDirs)
 install(TARGETS game_of_life

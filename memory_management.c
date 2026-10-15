@@ -1,7 +1,7 @@
 #include "memory_management.h"
 #include <stdlib.h>
 #include <stdio.h>
-
+/*
 
 inline b_list init_list(size_t size){
     b_list lt;
@@ -93,4 +93,4 @@ inline void add_by_index(b_list *lt, size_t index, g_block *block){
 
         }
     }
-}
+}*/
