@@ -20,13 +20,21 @@ static inline b_list init_list(size_t size){
 }
 static inline g_block* find_element(b_list *lt, int64_t x, int64_t y){
     for(;lt != NULL; lt = lt->next){
-        for(uint64_t i = 0; i <= lt->used; i++){
+        for(uint64_t i = 0; i < lt->used; i++){
             if(lt->pointers[i]->x == x && lt->pointers[i]->y == y){
                 return lt->pointers[i];
             }
         }
     }
     return NULL;
+}
+static inline g_block* pop(b_list *lt){
+    b_list *temp = lt;
+    for(;temp->next != NULL && temp->next->used != 0; temp = temp->next){}
+    if(temp->used == 0){
+        return NULL;
+    }
+    return temp->pointers[--temp->used];
 }
 static inline void set_list_size_min(b_list *lt, size_t size){
     size_t lt_size = 0;
@@ -43,6 +51,7 @@ static inline void set_list_size_min(b_list *lt, size_t size){
         if(temp != NULL)
         {
             last->pointers = temp;
+            last->size += lt_size;
             return;
         }
         last->next = (b_list*) malloc(sizeof(b_list));
@@ -84,14 +93,15 @@ static inline void add_element(b_list *lt, g_block *block, size_t size){
         }
     }
     expand_list(lt, size);
-    lt = lt->next;
-    lt->pointers[lt->used] = block;
-    lt->used++;
+    if(lt->next != NULL){
+        lt = lt->next;
+    }
+    lt->pointers[lt->used++] = block;
 }
 static inline g_block* add_element_distinct(b_list *lt, g_block *block, size_t size){
     b_list *last;
     for(b_list *temp = lt; temp != NULL; temp = temp->next){
-        for(size_t i = 0; i <= temp->used; i++){
+        for(size_t i = 0; i < temp->used; i++){
             if(temp->pointers[i]->x == block->x && temp->pointers[i]->y == block->y){
                 return block;
             }
@@ -112,8 +122,8 @@ static inline void delete_list_instance(b_list *lt){
 static inline void free_list(b_list *lt){
     b_list *temp = lt;
     while(1){
-        free(temp->pointers);
-        if(temp->next != NULL){
+        if(temp != NULL){
+            free(temp->pointers);
             lt = temp->next;
             free(temp);
             temp = lt;
@@ -122,6 +132,7 @@ static inline void free_list(b_list *lt){
         }
     }
 }
+
 static inline void delete_element(b_list *lt, g_block *block){
     b_list *temp = lt,*lt_block = NULL;
     size_t index;
@@ -141,8 +152,11 @@ static inline void delete_element(b_list *lt, g_block *block){
         }
         temp = temp->next;
     }
-    lt_block->pointers[index] = temp->pointers[temp->used];
-    if(temp->used == 0){
+    if(lt_block == NULL){
+        return;
+    }
+    lt_block->pointers[index] = temp->pointers[--temp->used];
+    if(temp->used == 0 && temp != lt){
         delete_list_instance(temp);
         while(1){
             if(lt->next == temp){
@@ -153,7 +167,6 @@ static inline void delete_element(b_list *lt, g_block *block){
         }
         return;
     }
-    temp->used--;
 }/*
 inline void add_by_index(b_list *lt, size_t index, g_block *block){
     b_list *temp = lt;

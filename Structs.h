@@ -3,6 +3,7 @@
 #include<stdint.h>
 #include <stdlib.h>
 #include "raylib.h"
+#include <time.h>
 enum NEIGHBOUR_SIDES{
     TOP = 0,
     RIGHT = 1,
@@ -32,7 +33,10 @@ typedef struct Game_of_life_block{
     2 bottom left
     3 top left
 */
-    uint64_t x,y;
+    int64_t x,y;
+    uint8_t flags;/*
+    mask 00000001 if the block is empty
+*/
 }g_block;
 
 typedef struct Block_List{
@@ -58,5 +62,12 @@ typedef struct Blocks_in_frame{
     size_t size;
     size_t window_size_x,window_size_y;
 }Frame;
+
+typedef struct UPS_Timer{
+    uint64_t *queue;
+    double update_interval;
+    struct timespec update_interval_t,next_update,delay;
+    uint64_t head,size;
+}U_t;
 
 #endif // STRUCTS_H

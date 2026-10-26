@@ -12,8 +12,10 @@ add_executable(game_of_life main.c
     graphics.h
     graphics.c
     memory_management.h
-    memory_management.c
+
     Structs.h
+    timer.h
+    timer.c
 )
 target_compile_options(game_of_life PRIVATE -mavx512f -O2)
 target_link_libraries(game_of_life PRIVATE raylib)
