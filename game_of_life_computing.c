@@ -63,6 +63,7 @@ enum generation_enum{
     BOTTOMM =        0b00000010,
     LEFTM =          0b00000001
 };
+
 uint8_t compute_block_avx512(g_block *block){
     uint8_t new_block_mask = 0;
     //compute middle with top and bottom
@@ -74,8 +75,8 @@ uint8_t compute_block_avx512(g_block *block){
         __m512i top,bottom,midle;
         if(i == 0){
             top = _mm512_maskz_loadu_epi64(0xFE,(const void*) (block->current_block_content-1));
-            if(block->neighbours_sides[0] != NULL){
-                top = _mm512_mask_loadu_epi64(top,0x01,(const void*)(block->neighbours_sides[0]->current_block_content + Block_side - 1));
+            if(block->neighbours_sides[TOP] != NULL){
+                top = _mm512_mask_loadu_epi64(top,0x01,(const void*)(block->neighbours_sides[TOP]->current_block_content + Block_side - 1));
             }
         }else{
             top = _mm512_loadu_epi64((const void*)(block->current_block_content+i - 1));
@@ -84,8 +85,8 @@ uint8_t compute_block_avx512(g_block *block){
         all_zero = _mm512_or_si512(midle, all_zero);
         if(i == 56){
             bottom = _mm512_maskz_loadu_epi64(0x7F,(const void*) (block->current_block_content + 57));
-            if(block->neighbours_sides[2] != NULL){
-                bottom = _mm512_mask_loadu_epi64(bottom,0x80,(const void*)(block->neighbours_sides[2]->current_block_content));
+            if(block->neighbours_sides[BOTTOM] != NULL){
+                bottom = _mm512_mask_loadu_epi64(bottom,0x80,(const void*)(block->neighbours_sides[BOTTOM]->current_block_content - 7));
             }
         }else{
             bottom = _mm512_loadu_epi64((const void*)(block->current_block_content + i + 1));
@@ -115,7 +116,7 @@ uint8_t compute_block_avx512(g_block *block){
         _mm512_store_epi64((void*)(block->next_block_content + i) , result);
     }
     //if all zero set flag
-    block->flags |= (uint8_t) _mm512_cmpeq_epi64_mask(all_zero, _mm512_setzero_si512());
+    block->flags = ((((uint8_t) _mm512_cmpneq_epi64_mask(all_zero, _mm512_setzero_si512())) == 0)? 1 : 0) | (block->flags & 0b11111110);
     //corners
     /*
     struct Game_of_life_block *neighbours_sides[4];
@@ -251,12 +252,12 @@ uint8_t compute_block_avx512(g_block *block){
     }
 
     //right side without corners
-    if(block->neighbours_sides[1] != NULL){
-        index = ((block->current_block_content[0] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[0] >> 63);
+    if(block->neighbours_sides[RIGHT] != NULL){
+        index = ((block->current_block_content[0] & 0b11) << 1) | (block->neighbours_sides[RIGHT]->current_block_content[0] >> 63);
         for(uint16_t i = 1; i < Block_side - 1; i++){
             index = (index & 0b111) << 3;
-            index |= ((block->current_block_content[i] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[i] >> 63);
-            shifter = ((block->current_block_content[i + 1] & 0b11) << 1) | (block->neighbours_sides[1]->current_block_content[i + 1] >> 63);
+            index |= ((block->current_block_content[i] & 0b11) << 1) | (block->neighbours_sides[RIGHT]->current_block_content[i] >> 63);
+            shifter = ((block->current_block_content[i + 1] & 0b11) << 1) | (block->neighbours_sides[RIGHT]->current_block_content[i + 1] >> 63);
             block->next_block_content[i] = (block->next_block_content[i] & left_63_bit_mask) | (access_look_up_table(index,shifter));
         }
     }
@@ -276,17 +277,17 @@ uint8_t compute_block_avx512(g_block *block){
     }
 
     //left side without corners
-    if(block->neighbours_sides[3] != NULL){
-        index = (block->current_block_content[0] >> 62) | ((block->neighbours_sides[3]->current_block_content[0] & 1) << 2);
+    if(block->neighbours_sides[LEFT] != NULL){
+        index = (block->current_block_content[0] >> 62) | ((block->neighbours_sides[LEFT]->current_block_content[0] & 1) << 2);
         for(uint16_t i = 1; i < Block_side - 1; i++){
             index = (index & 0b111) << 3;
-            index |= (block->current_block_content[i] >> 62) | ((block->neighbours_sides[3]->current_block_content[i] & 1) << 2);
-            shifter = (block->current_block_content[i + 1] >> 62) | ((block->neighbours_sides[3]->current_block_content[i + 1] & 1) << 2);
+            index |= (block->current_block_content[i] >> 62) | ((block->neighbours_sides[LEFT]->current_block_content[i] & 1) << 2);
+            shifter = (block->current_block_content[i + 1] >> 62) | ((block->neighbours_sides[LEFT]->current_block_content[i + 1] & 1) << 2);
             block->next_block_content[i] = (block->next_block_content[i] & right_63_bit_mask) | (access_look_up_table(index,shifter) << 63);
         }
     }
     else{
-        index = block->current_block_content[0] >> 62;
+        index = (block->current_block_content[0] >> 62) & 0b011;
         for(uint16_t i = 1; i < Block_side - 1; i++){
             index = (index & 0b111) << 3;
             index |= block->current_block_content[i] >> 62;
@@ -321,6 +322,10 @@ g_block* init_block(int64_t x, int64_t y){
         printf("could not allocate memory\n");
         exit(1);
     }
+    for(uint8_t i = 0; i < Block_side; i++){
+        block->current_block_content[i] = 0;
+        block->next_block_content[i] = 0;
+    }
     memset(block->neighbours_sides, 0, sizeof(struct Game_of_life_block*) * 4);
     memset(block->neighbours_corners, 0, sizeof(struct Game_of_life_block*) * 4);
     block->x = x;
@@ -349,7 +354,7 @@ void free_block(g_block *block){
     free(block);
 }
 
-void main_compute(Core *core, size_t size){
+void main_compute(Core *core){
     //iterate over the main list
     for(b_list *temp = &(core->main); temp != NULL; temp = temp->next){
         for(size_t i = 0; i < temp->used; i++){
@@ -364,10 +369,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_sides[TOP] == NULL && (mask & TOPM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x, temp->pointers[i]->y + 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x, temp->pointers[i]->y + 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x, temp->pointers[i]->y + 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_sides[BOTTOM] = temp->pointers[i];
                 temp->pointers[i]->neighbours_sides[TOP] = tempb;
@@ -377,10 +383,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_sides[RIGHT] == NULL && (mask & RIGHTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x + 1, temp->pointers[i]->y);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_sides[LEFT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_sides[RIGHT] = tempb;
@@ -390,10 +397,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_sides[BOTTOM] == NULL && (mask & BOTTOMM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x, temp->pointers[i]->y - 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x, temp->pointers[i]->y - 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x, temp->pointers[i]->y - 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_sides[TOP] = temp->pointers[i];
                 temp->pointers[i]->neighbours_sides[BOTTOM] = tempb;
@@ -403,10 +411,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_sides[LEFT] == NULL && (mask & LEFTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x - 1, temp->pointers[i]->y);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_sides[RIGHT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_sides[LEFT] = tempb;
@@ -421,10 +430,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_corners[TOP_RIGHT] == NULL && (mask & TOP_RIGHTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y + 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x + 1, temp->pointers[i]->y + 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y + 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_corners[BOTTOM_LEFT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_corners[TOP_RIGHT] = tempb;
@@ -434,10 +444,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_corners[BOTTOM_RIGHT] == NULL && (mask & BOTTOM_RIGHTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x + 1, temp->pointers[i]->y - 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x + 1, temp->pointers[i]->y - 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x + 1, temp->pointers[i]->y - 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_corners[TOP_LEFT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_corners[BOTTOM_RIGHT] = tempb;
@@ -447,10 +458,11 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_corners[BOTTOM_LEFT] == NULL && (mask & BOTTOM_LEFTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y - 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x - 1, temp->pointers[i]->y - 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y - 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_corners[TOP_RIGHT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_corners[BOTTOM_LEFT] = tempb;
@@ -460,17 +472,24 @@ void main_compute(Core *core, size_t size){
             if(temp->pointers[i]->neighbours_corners[TOP_LEFT] == NULL && (mask & TOP_LEFTM) != 0){
                 tempb = find_element(&core->create_next, temp->pointers[i]->x - 1, temp->pointers[i]->y + 1);
                 if(tempb == NULL){
+                    tempb = find_element(&core->main, temp->pointers[i]->x - 1, temp->pointers[i]->y + 1);
+                }
+                if(tempb == NULL){
                     tempb = init_block(temp->pointers[i]->x - 1, temp->pointers[i]->y + 1);
-                    add_element(&core->create_next, tempb, size);
-                    add_element(&core->main, tempb, size);
-                    core->size++;
+                    add_element(&core->create_next, tempb, core->size);
                 }
                 tempb->neighbours_corners[BOTTOM_RIGHT] = temp->pointers[i];
                 temp->pointers[i]->neighbours_corners[TOP_LEFT] = tempb;
             }
         }
     }
-    //iterate over the update list
+    //iterate over the update list to connect neighbors
+
+    for(b_list *temp = &core->create_next; temp != NULL; temp = temp->next){
+        for(uint64_t i = 0; i < temp->used; i++){
+            add_element(&core->main,temp->pointers[i], core->size);
+        }
+    }
     if(core->create_next.used != 0){
         for(b_list *temp_m = &core->main; temp_m != NULL; temp_m = temp_m->next )
         {
@@ -555,6 +574,13 @@ void main_compute(Core *core, size_t size){
             }
         }
     }
+
+    // compute the newly created too
+    for(b_list *temp = &core->create_next; temp != NULL; temp = temp->next){
+        for(uint64_t i = 0; i < temp->used; i++){
+            compute_block_avx512(temp->pointers[i]);
+        }
+    }
 }
 
 void empty_create_next(Core *core){
@@ -563,7 +589,7 @@ void empty_create_next(Core *core){
     }
 }
 
-void check_for_deletion(Core *core, size_t size){
+void check_for_deletion(Core *core){
     for(b_list *temp = &core->main; temp != NULL; temp = temp->next){
         for(uint64_t i = 0; i < temp->used; i++){
             if(temp->pointers[i]->flags & 1 == 0){
@@ -581,14 +607,15 @@ void check_for_deletion(Core *core, size_t size){
                 }
             }
             if(delete){
-                add_element(&core->delete_next, temp->pointers[i], size);
+                add_element(&core->delete_next, temp->pointers[i], core->size);
             }
         }
     }
 }
 void delete_from_Core(Core *core){
+    // remove from the main and strip the neighbors
     for(b_list *temp = &core->delete_next; temp != NULL; temp = temp->next){
-        for(uint64_t i = 0; i < temp->size; i++){
+        for(uint64_t i = 0; i < temp->used; i++){
             for(uint8_t k = 0; k < 4; k++){
                 if(temp->pointers[i]->neighbours_sides[k] != NULL){
                     temp->pointers[i]->neighbours_sides[k]->neighbours_sides[(k + 2) & 3] = NULL;
@@ -597,7 +624,106 @@ void delete_from_Core(Core *core){
                     temp->pointers[i]->neighbours_corners[k]->neighbours_corners[(k + 2) & 3] = NULL;
                 }
             }
+            delete_element(&core->main,temp->pointers[i]);
+            //printf("deleted from main and stripped the neighbors %d %d\n",temp->pointers[i]->x,temp->pointers[i]->y);
+        }
+    }
+    // free
+    for(b_list *temp = &core->delete_next; temp != NULL; temp = temp->next){
+        for(uint64_t i = 0; i < temp->used; i++){
+            free_block(temp->pointers[i]);
+            //printf("freed %d %d\n",temp->pointers[i]->x,temp->pointers[i]->y);
         }
         temp->used = 0;
+    }
+}
+Core init_core(uint64_t size){
+    Core core;
+    core.size = size;
+    core.main = init_list(size);
+    core.main.used = 0;
+    core.create_next = init_list(size);
+    core.create_next.used = 0;
+    core.delete_next = init_list(size);
+    core.delete_next.used = 0;
+    return core;
+}
+
+void add_block(Core *core, g_block *block_n){
+    for(b_list *temp = &core->main; temp != NULL; temp = temp->next){
+        for(uint64_t i = 0; i < temp->used; i++){
+            g_block *block_m = temp->pointers[i];
+            if(block_n->neighbours_sides[TOP] == NULL && block_m->neighbours_sides[BOTTOM] == NULL){
+                if((block_n->x == block_m->x) && (block_n->y + 1 == block_m->y)){
+                    block_n->neighbours_sides[TOP] = block_m;
+                    block_m->neighbours_sides[BOTTOM] = block_n;
+                }
+            }
+            // BOTTOM: n is above m
+            if(block_n->neighbours_sides[BOTTOM] == NULL && block_m->neighbours_sides[TOP] == NULL){
+                if((block_n->x == block_m->x) && (block_n->y - 1 == block_m->y)){
+                    block_n->neighbours_sides[BOTTOM] = block_m;
+                    block_m->neighbours_sides[TOP] = block_n;
+                }
+            }
+            // RIGHT: n is to the left of m
+            if(block_n->neighbours_sides[RIGHT] == NULL && block_m->neighbours_sides[LEFT] == NULL){
+                if((block_n->x + 1 == block_m->x) && (block_n->y == block_m->y)){
+                    block_n->neighbours_sides[RIGHT] = block_m;
+                    block_m->neighbours_sides[LEFT] = block_n;
+                }
+            }
+            // LEFT: n is to the right of m
+            if(block_n->neighbours_sides[LEFT] == NULL && block_m->neighbours_sides[RIGHT] == NULL){
+                if((block_n->x - 1 == block_m->x) && (block_n->y == block_m->y)){
+                    block_n->neighbours_sides[LEFT] = block_m;
+                    block_m->neighbours_sides[RIGHT] = block_n;
+                }
+            }
+
+            // ==========================================
+            // 4 CORNERS
+            // ==========================================
+
+            // TOP_RIGHT: n is bottom-left of m
+            if(block_n->neighbours_corners[TOP_RIGHT] == NULL && block_m->neighbours_corners[BOTTOM_LEFT] == NULL){
+                if((block_n->x + 1 == block_m->x) && (block_n->y + 1 == block_m->y)){
+                    block_n->neighbours_corners[TOP_RIGHT] = block_m;
+                    block_m->neighbours_corners[BOTTOM_LEFT] = block_n;
+                }
+            }
+            // BOTTOM_RIGHT: n is top-left of m
+            if(block_n->neighbours_corners[BOTTOM_RIGHT] == NULL && block_m->neighbours_corners[TOP_LEFT] == NULL){
+                if((block_n->x + 1 == block_m->x) && (block_n->y - 1 == block_m->y)){
+                    block_n->neighbours_corners[BOTTOM_RIGHT] = block_m;
+                    block_m->neighbours_corners[TOP_LEFT] = block_n;
+                }
+            }
+            // BOTTOM_LEFT: n is top-right of m
+            if(block_n->neighbours_corners[BOTTOM_LEFT] == NULL && block_m->neighbours_corners[TOP_RIGHT] == NULL){
+                if((block_n->x - 1 == block_m->x) && (block_n->y - 1 == block_m->y)){
+                    block_n->neighbours_corners[BOTTOM_LEFT] = block_m;
+                    block_m->neighbours_corners[TOP_RIGHT] = block_n;
+                }
+            }
+            // TOP_LEFT: n is bottom-right of m
+            if(block_n->neighbours_corners[TOP_LEFT] == NULL && block_m->neighbours_corners[BOTTOM_RIGHT] == NULL){
+                if((block_n->x - 1 == block_m->x) && (block_n->y + 1 == block_m->y)){
+                    block_n->neighbours_corners[TOP_LEFT] = block_m;
+                    block_m->neighbours_corners[BOTTOM_RIGHT] = block_n;
+                }
+            }
+        }
+    }
+    add_element(&core->main, block_n, core->size);
+}
+void swap_pointers_core(Core *core){
+    for(b_list *temp = &core->main; temp != NULL; temp = temp->next){
+        for(uint64_t i = 0; i < temp->used; i++)
+        {
+            uint64_t *tempi = temp->pointers[i]->current_block_content;
+            temp->pointers[i]->current_block_content = temp->pointers[i]->next_block_content;
+            temp->pointers[i]->next_block_content = tempi;
+        }
     }
 }

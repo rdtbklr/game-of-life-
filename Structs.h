@@ -18,8 +18,8 @@ enum NEIGHBOUR_CORNERS{
 };
 
 typedef struct Game_of_life_block{
-    int64_t *current_block_content;
-    int64_t *next_block_content;
+    uint64_t *current_block_content;
+    uint64_t *next_block_content;
 
     struct Game_of_life_block *neighbours_sides[4]; /*
     0 top

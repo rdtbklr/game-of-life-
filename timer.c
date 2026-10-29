@@ -80,7 +80,7 @@ void change_update_interval(U_t *t, double update_interval){
 
 uint8_t spin_wait(struct timespec current, struct timespec *next, struct timespec min_wait){
     current = subtraction(*next, current);
-    *next = subtraction(*next, halve(min_wait));
+    *next = subtraction(*next, min_wait);
     return x_bigger_equal_y(current, min_wait);
 }
 void free_U_t(U_t t){
