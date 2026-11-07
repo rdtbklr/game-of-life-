@@ -17,7 +17,18 @@ enum NEIGHBOUR_CORNERS{
     TOP_LEFT = 3
 };
 
+enum G_BLOCK_FLAGS{
+    BLOCK_EMPTY =   0b00000001,
+    BLOCK_CHANGED = 0b00000010
+};
+
+typedef struct Texture_Image_duo{
+    Image img;
+    Texture txt;
+} ti_duo;
+
 typedef struct Game_of_life_block{
+    struct Texture_Image_duo *render_block;
     uint64_t *current_block_content;
     uint64_t *next_block_content;
 
@@ -46,21 +57,29 @@ typedef struct Block_List{
     size_t used;
 }b_list;
 
+typedef struct Memory_Buffer_Stack{
+    void **pointers;
+    uint64_t size;
+    uint64_t used;
+}memb;
+
 typedef struct Core_list{
     struct Block_List main;
     struct Block_List delete_next;
     struct Block_List create_next;
+    struct Memory_Buffer_Stack block_buffer;
     size_t size;
 }Core;
 
 
 typedef struct Blocks_in_frame{
     b_list list;
-    Color alive_cell_color, Dead_cell_color;
+    struct Memory_Buffer_Stack texture_buffer;
     Camera2D camera;
-    size_t cell_size;
-    size_t size;
-    size_t window_size_x,window_size_y;
+    Color alive_cell_color, Dead_cell_color;
+    uint64_t cell_size;
+    uint64_t size;
+    uint64_t window_size_x,window_size_y;
 }Frame;
 
 typedef struct UPS_Timer{
@@ -69,5 +88,6 @@ typedef struct UPS_Timer{
     struct timespec update_interval_t,next_update,delay;
     uint64_t head,size;
 }U_t;
+
 
 #endif // STRUCTS_H

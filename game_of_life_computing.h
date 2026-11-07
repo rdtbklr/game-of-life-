@@ -18,4 +18,5 @@ void delete_from_Core(Core *core);
 Core init_core(uint64_t size);
 void add_block(Core *core, g_block *block_n);
 void swap_pointers_core(Core *core);
+void free_core(Core *core);
 #endif // GAME_OF_LIFE_COMPUTING_H

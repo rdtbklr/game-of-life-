@@ -116,7 +116,7 @@ uint8_t compute_block_avx512(g_block *block){
         _mm512_store_epi64((void*)(block->next_block_content + i) , result);
     }
     //if all zero set flag
-    block->flags = ((((uint8_t) _mm512_cmpneq_epi64_mask(all_zero, _mm512_setzero_si512())) == 0)? 1 : 0) | (block->flags & 0b11111110);
+    block->flags = ((((uint8_t) _mm512_cmpneq_epi64_mask(all_zero, _mm512_setzero_si512())) == 0)? BLOCK_EMPTY : 0) | (block->flags & 0b11111110);
     //corners
     /*
     struct Game_of_life_block *neighbours_sides[4];
@@ -316,6 +316,7 @@ uint8_t compute_block_avx512(g_block *block){
 
 g_block* init_block(int64_t x, int64_t y){
     g_block *block =(g_block*) malloc(sizeof(g_block));
+    block->render_block = NULL;
     block->current_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
     block->next_block_content = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * Block_side);
     if(block->current_block_content == NULL || block->next_block_content == NULL){
@@ -334,31 +335,32 @@ g_block* init_block(int64_t x, int64_t y){
     return block;
 }
 void create_random_noise(g_block *block){
-    srand(time(NULL));
     for(int i = 0; i < 64; i++){
-        block->current_block_content[i] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
-        block->next_block_content[i] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
+        block->current_block_content[i] = ((uint64_t) rand()) * ((uint64_t) rand());
     }
 }
 void free_block(g_block *block){
-    for(uint8_t i = 0; i < 4; i++){
-        if(block->neighbours_corners[i] != NULL){
-            block->neighbours_corners[i]->neighbours_corners[(i + 2) & 0b11] = NULL;
-        }
-        if(block->neighbours_sides[i] != NULL){
-            block->neighbours_sides[i]->neighbours_sides[(i + 2) & 0b11] = NULL;
-        }
-    }
     free(block->current_block_content);
     free(block->next_block_content);
     free(block);
 }
-
+void is_block_changed(g_block*block){
+    for(uint8_t i = 0; i < 64; i++){
+        if(block->current_block_content[i] != block->next_block_content[i]){
+            block->flags |= BLOCK_CHANGED;
+            return;
+        }
+    }
+}
 void main_compute(Core *core){
     //iterate over the main list
     for(b_list *temp = &(core->main); temp != NULL; temp = temp->next){
         for(size_t i = 0; i < temp->used; i++){
             uint8_t mask = compute_block_avx512(temp->pointers[i]);
+            // check for change
+            if(temp->pointers[i]->render_block != NULL){
+                is_block_changed(temp->pointers[i]);
+            }
             g_block *tempb;
 
             // ==========================================
@@ -483,6 +485,9 @@ void main_compute(Core *core){
             }
         }
     }
+
+
+
     //iterate over the update list to connect neighbors
 
     for(b_list *temp = &core->create_next; temp != NULL; temp = temp->next){
@@ -592,30 +597,32 @@ void empty_create_next(Core *core){
 void check_for_deletion(Core *core){
     for(b_list *temp = &core->main; temp != NULL; temp = temp->next){
         for(uint64_t i = 0; i < temp->used; i++){
-            if(temp->pointers[i]->flags & 1 == 0){
+            if((temp->pointers[i]->flags & BLOCK_EMPTY) == 0){
                 continue;
             }
             uint8_t delete = 1;
             for(int k = 0; k < 4; k++){
-                if(temp->pointers[i]->neighbours_corners[k] != NULL && (temp->pointers[i]->neighbours_corners[k]->flags & 1) == 0){
+                if(temp->pointers[i]->neighbours_corners[k] != NULL && (temp->pointers[i]->neighbours_corners[k]->flags & BLOCK_EMPTY) == 0){
                     delete = 0;
                     break;
                 }
-                if(temp->pointers[i]->neighbours_sides[k] != NULL && (temp->pointers[i]->neighbours_sides[k]->flags & 1) == 0){
+                if(temp->pointers[i]->neighbours_sides[k] != NULL && (temp->pointers[i]->neighbours_sides[k]->flags & BLOCK_EMPTY) == 0){
                     delete = 0;
                     break;
                 }
             }
             if(delete){
                 add_element(&core->delete_next, temp->pointers[i], core->size);
+                delete_element(&core->main,temp->pointers[i]);
             }
         }
     }
 }
 void delete_from_Core(Core *core){
-    // remove from the main and strip the neighbors
+    //strip the neighbors
     for(b_list *temp = &core->delete_next; temp != NULL; temp = temp->next){
         for(uint64_t i = 0; i < temp->used; i++){
+            //strip from the neighbors
             for(uint8_t k = 0; k < 4; k++){
                 if(temp->pointers[i]->neighbours_sides[k] != NULL){
                     temp->pointers[i]->neighbours_sides[k]->neighbours_sides[(k + 2) & 3] = NULL;
@@ -624,7 +631,6 @@ void delete_from_Core(Core *core){
                     temp->pointers[i]->neighbours_corners[k]->neighbours_corners[(k + 2) & 3] = NULL;
                 }
             }
-            delete_element(&core->main,temp->pointers[i]);
             //printf("deleted from main and stripped the neighbors %d %d\n",temp->pointers[i]->x,temp->pointers[i]->y);
         }
     }
@@ -726,4 +732,17 @@ void swap_pointers_core(Core *core){
             temp->pointers[i]->next_block_content = tempi;
         }
     }
+}
+void free_core(Core *core){
+    for(b_list *templ = &core->main; templ != NULL; templ = templ->next){
+        for(uint64_t i = 0; i < templ->used; i++){
+            free_block(templ->pointers[i]);
+        }
+    }
+    free_list(core->main.next);
+    free_list(core->create_next.next);
+    free_list(core->delete_next.next);
+    free(core->main.pointers);
+    free(core->create_next.pointers);
+    free(core->delete_next.pointers);
 }

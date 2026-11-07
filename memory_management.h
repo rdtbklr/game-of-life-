@@ -167,26 +167,41 @@ static inline void delete_element(b_list *lt, g_block *block){
         }
         return;
     }
-}/*
-inline void add_by_index(b_list *lt, size_t index, g_block *block){
-    b_list *temp = lt;
-    size_t size = 0;
-    while(1){
-        if(size + temp->size> index){
-            temp->pointers[index - size] = block;
-            return;
-        }else{
-            size += temp->size;
-        }
-        if(temp->next == NULL){
-            break;
-        }
-    }
 }
-inline void get_by_index(b_list *lt, size_t index){
-    while(lt != NULL){
-        if
+static struct Memory_Buffer_Stack init_Memory_Buffer_Stack(uint64_t size){
+    memb stack;
+    stack.pointers = (void**) calloc(size, sizeof(void**));
+    stack.size = size;
+    stack.used;
+    return stack;
+}
+static inline uint8_t change_size_memb(memb* stack, uint64_t size){
+    void **temp = (void**) realloc(stack->pointers,  size * sizeof(void**));
+    if(temp == NULL){
+        return 1;
     }
-}*/
+    stack->pointers = temp;
+    stack->size;
+    if(stack->size < stack->used){
+        stack->used = stack->size;
+    }
+    return 0;
+}
+
+static inline void *add_to_memb(memb *stack, void* pointer){
+    if(stack->used >= stack->size){
+        return pointer;
+    }
+    stack->pointers[stack->used++] = pointer;
+    return NULL;
+}
+static inline void *pop_from_memb(memb *stack){
+    if(stack->used > 0){
+        return stack->pointers[--stack->used];
+    }
+    return NULL;
+}
+
+
 
 #endif // MEMORY_MANAGEMENT_H

@@ -16,8 +16,10 @@ add_executable(game_of_life main.c
     Structs.h
     timer.h
     timer.c
+    user_input.c
+    user_input.h
 )
-target_compile_options(game_of_life PRIVATE -mavx512f -O2)
+target_compile_options(game_of_life PRIVATE -march=native -O2)
 target_link_libraries(game_of_life PRIVATE raylib)
 include(GNUInstallDirs)
 install(TARGETS game_of_life
