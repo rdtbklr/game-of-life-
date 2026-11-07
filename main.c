@@ -86,7 +86,7 @@ int main()
 
 
     // timing things
-    double Update_rate = 10.0,Frame_rate = 60.0;
+    double Update_rate = 120.0,Frame_rate = 240.0;
     U_t Updater,Renderer,UPS_tracker;
     Updater = init_timer(1/ Update_rate, 0);
     Renderer = init_timer(1/ Frame_rate, 0);

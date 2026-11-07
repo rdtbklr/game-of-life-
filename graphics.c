@@ -49,11 +49,13 @@ ti_duo* create_Texture_Image_duo(){
     duo->img.format = PIXELFORMAT_UNCOMPRESSED_R5G5B5A1;
     duo->img.mipmaps = 1;
     duo->img.data = aligned_alloc(64, sizeof(int16_t) * 64 * 64);
-    if(duo->img.data == NULL){
+    duo->last_render = (uint64_t*) aligned_alloc(64, sizeof(uint64_t) * 64);
+    if(duo->img.data == NULL || duo->last_render == NULL){
         printf("could not allocate image data\n");
         exit(1);
     }
     memset(duo->img.data, 0, sizeof(int16_t) * 64 * 64);
+    memset(duo->last_render, 0, sizeof(int64_t) * 64);
     //printf("This image is %s\n",(IsImageValid(duo->img)) ? "valid" : "not valid");
     duo->txt = LoadTextureFromImage(duo->img);
     return duo;
@@ -67,6 +69,7 @@ ti_duo* get_Texture_Image_duo(memb *buffer){
 }
 void delete_Texture_Image_duo(ti_duo *duo){
     free(duo->img.data);
+    free(duo->last_render);
     UnloadTexture(duo->txt);
     free(duo);
 }
@@ -133,6 +136,7 @@ void update_block_texture(g_block *block,Color alive_cell,Color dead_cell){
     uint16_t calive_cell,cdead_cell;
     calive_cell = convert32_to_16(alive_cell);
     cdead_cell = convert32_to_16(dead_cell);
+    uint8_t anything_changed = 0;
     __m512i alive = _mm512_set1_epi16( calive_cell);
     __m512i dead = _mm512_set1_epi16( cdead_cell);
     __m512i result1,result2;
@@ -140,18 +144,28 @@ void update_block_texture(g_block *block,Color alive_cell,Color dead_cell){
     __m512i permutexm = _mm512_set_epi16(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31);
     for(uint8_t i = 0; i < 64; i++){
         uint32_t first_half = block->current_block_content[i] & 0xFFFFFFFF;
+        uint32_t first_half_r = block->render_block->last_render[i] & 0xFFFFFFFF;
+
         uint32_t second_half = block->current_block_content[i] >> 32;
+        uint32_t second_half_r = block->render_block->last_render[i] >> 32;
 
-        result1 = _mm512_mask_blend_epi16(first_half, dead, alive);
-        result2 = _mm512_mask_blend_epi16(second_half, dead, alive);
-
-        result1 = _mm512_permutexvar_epi16(permutexm, result1);
-        result2 = _mm512_permutexvar_epi16(permutexm, result2);
-
-        _mm512_storeu_si512(data + 2 * i + 1, result1);
-        _mm512_storeu_si512(data + 2 * i, result2);
+        if((first_half ^ first_half_r) != 0){
+            result1 = _mm512_mask_blend_epi16(first_half, dead, alive);
+            result1 = _mm512_permutexvar_epi16(permutexm, result1);
+            _mm512_store_si512(data + 2 * i + 1, result1);
+            anything_changed = 1;
+        }
+        if((second_half ^ second_half_r) != 0){
+            result2 = _mm512_mask_blend_epi16(second_half, dead, alive);
+            result2 = _mm512_permutexvar_epi16(permutexm, result2);
+            _mm512_store_si512(data + 2 * i, result2);
+            anything_changed = 1;
+        }
+        block->render_block->last_render[i] = block->current_block_content[i];
     }
-    UpdateTexture(block->render_block->txt, block->render_block->img.data);
+    if(anything_changed){
+        UpdateTexture(block->render_block->txt, block->render_block->img.data);
+    }
 }
 void print_frame(Frame *frame){
     //BeginDrawing();

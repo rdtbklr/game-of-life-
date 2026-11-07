@@ -25,6 +25,7 @@ enum G_BLOCK_FLAGS{
 typedef struct Texture_Image_duo{
     Image img;
     Texture txt;
+    uint64_t *last_render;
 } ti_duo;
 
 typedef struct Game_of_life_block{
